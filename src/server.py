@@ -36590,17 +36590,28 @@ def _resource_install_guidance() -> Dict[str, Any]:
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def _skill_roots() -> List[str]:
-    """Folders of SKILL.md skills to serve through Skills over MCP.
+    """Skill sources to serve through Skills over MCP.
 
     The repo's own `.claude/skills` (the Resolve domain skills), then every
-    folder in $DAVINCI_MCP_SKILLS_DIRS (os.pathsep-separated). Set
-    DAVINCI_MCP_SKILLS=0 to serve none.
+    entry in $DAVINCI_MCP_SKILLS_DIRS (os.pathsep-separated) and every
+    non-blank, non-# line of the file named by $DAVINCI_MCP_SKILLS_FILE. An
+    entry is either a folder of skill folders or one skill folder (it holds a
+    SKILL.md), so a studio can list exactly which of its own skills to serve,
+    read in place. Set DAVINCI_MCP_SKILLS=0 to serve none.
     """
     if os.environ.get("DAVINCI_MCP_SKILLS", "1").strip().lower() in ("0", "false", "no", "off"):
         return []
     roots = [os.path.join(project_dir, ".claude", "skills")]
     extra = os.environ.get("DAVINCI_MCP_SKILLS_DIRS", "")
-    roots.extend(p for p in extra.split(os.pathsep) if p.strip())
+    roots.extend(p.strip() for p in extra.split(os.pathsep) if p.strip())
+    listing = os.path.expanduser(os.environ.get("DAVINCI_MCP_SKILLS_FILE", "").strip())
+    if listing:
+        try:
+            with open(listing, encoding="utf-8") as fh:
+                roots.extend(line.strip() for line in fh
+                             if line.strip() and not line.lstrip().startswith("#"))
+        except OSError as exc:
+            logger.warning(f"Skills list {listing} unreadable: {exc}")
     return roots
 
 

@@ -6,7 +6,10 @@
 # This replaces the v1 `mcp` SDK with mcp 2.x underneath fastmcp 4, and
 # src/utils/mcp_sdk.py then picks the "fastmcp4" backend on its own. Skills come
 # from <project>/.claude/skills plus any folders in DAVINCI_MCP_SKILLS_DIRS
-# (os.pathsep-separated); DAVINCI_MCP_SKILLS=0 turns them off. Networked
+# (os.pathsep-separated) and the lines of the file named by
+# DAVINCI_MCP_SKILLS_FILE. Each entry is a folder of skills or one skill folder,
+# read in place; an invalid skill is skipped with a warning. DAVINCI_MCP_SKILLS=0
+# turns them off. Networked
 # transports (sse / streamable-http) still need the v1 SDK, so for those set
 # DAVINCI_MCP_SDK=mcp1 with the default requirements.txt install.
 fastmcp>=4.2.6,<5

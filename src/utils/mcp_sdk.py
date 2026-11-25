@@ -138,32 +138,65 @@ def is_error_result(result: Any) -> bool:
 
 
 def add_skill_directories(server: Any, roots: Iterable[str], logger: Any = None) -> int:
-    """Serve each folder of SKILL.md skills through Skills over MCP.
+    """Serve SKILL.md skills through Skills over MCP.
 
-    Only FastMCP 4.2+ can do this; on the v1 SDK it is a no-op. A root that is
-    missing, or whose skills break the spec, is skipped with a warning rather
-    than stopping the server. Returns the number of roots added.
+    Each entry is a folder of skill folders, or one skill folder (it holds a
+    SKILL.md itself). Only FastMCP 4.2+ can serve skills; on the v1 SDK this is
+    a no-op. Skills are re-read on each request, so edits go live. An invalid
+    skill is skipped with a warning instead of hiding its valid neighbours or
+    stopping the server. Returns the number of skills served at startup.
     """
     if not IS_FASTMCP4:
         return 0
     try:
-        from fastmcp.skills.provider import SkillsDirectoryProvider
+        from fastmcp.skills import provider as _skills
     except Exception as exc:  # pragma: no cover - older fastmcp 4.x
         if logger:
             logger.warning(f"Skills over MCP unavailable in this fastmcp: {exc}")
         return 0
-    added = 0
-    for root in roots:
-        root = os.path.expanduser(str(root or "").strip())
-        if not root or not os.path.isdir(root):
+
+    sources: list = []  # (root, only-this-skill-name or None)
+    for entry in roots:
+        entry = os.path.expanduser(str(entry or "").strip())
+        if not entry or not os.path.isdir(entry):
             continue
-        try:
-            server.add_provider(SkillsDirectoryProvider(root, reload=True))
-            added += 1
-        except Exception as exc:
-            if logger:
-                logger.warning(f"Skipped skills folder {root}: {exc}")
-    return added
+        entry = os.path.abspath(entry)
+        if os.path.isfile(os.path.join(entry, "SKILL.md")):
+            sources.append((os.path.dirname(entry), os.path.basename(entry)))
+        else:
+            sources.append((entry, None))
+    if not sources:
+        return 0
+    warned: set = set()
+
+    class _LenientSkills(_skills.SkillsDirectoryProvider):
+        """Serve the listed sources; log and skip invalid skills."""
+
+        def _scan(self):  # noqa: D401 - overrides the strict scan
+            from pathlib import Path
+
+            served: dict = {}
+            for root, only in sources:
+                found, invalid = _skills._scan_skill_roots([Path(root)])
+                for path, skill in found.items():
+                    if only is not None and path != only:
+                        continue
+                    served.setdefault(path, skill)
+                for line in invalid:
+                    if only is None or f"/{only}:" in line or f"{os.sep}{only}:" in line:
+                        if logger and line not in warned:
+                            warned.add(line)
+                            logger.warning(f"Skipped invalid skill {line.lstrip('- ')}")
+            return served
+
+    try:
+        provider = _LenientSkills([root for root, _ in sources], reload=True)
+        server.add_provider(provider)
+    except Exception as exc:
+        if logger:
+            logger.warning(f"Skills over MCP not served: {exc}")
+        return 0
+    return len(provider._last_good)
 
 
 async def run_stdio_async(server: Any, stdin: Any = None, stdout: Any = None) -> None:
