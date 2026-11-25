@@ -45,6 +45,21 @@ class SkillSourcesTest(unittest.TestCase):
         _skill(self.root, "added-later")
         self.assertIn("skill://added-later/SKILL.md", _served(server))
 
+    def test_a_single_skill_entry_never_scans_its_parent(self):
+        from fastmcp.skills import provider as _skills
+
+        with mock.patch.object(_skills, "_scan_skill_roots",
+                               side_effect=AssertionError("scanned the parent")):
+            server = FastMCP("t")
+            self.assertEqual(add_skill_directories(server, [self.good, self.picked]), 2)
+            self.assertEqual(_served(server), ["skill://good-one/SKILL.md", "skill://picked/SKILL.md"])
+
+    def test_an_invalid_listed_skill_is_logged_not_dropped_silently(self):
+        logger = mock.Mock()
+        bad = os.path.join(self.root, "bad-one")
+        self.assertEqual(add_skill_directories(FastMCP("t"), [bad, self.picked], logger), 1)
+        self.assertIn("bad-one", logger.warning.call_args_list[0].args[0])
+
     def test_missing_entries_are_ignored(self):
         self.assertEqual(add_skill_directories(FastMCP("t"), ["/nope", ""]), 0)
 

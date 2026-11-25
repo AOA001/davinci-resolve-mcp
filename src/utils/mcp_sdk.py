@@ -155,42 +155,56 @@ def add_skill_directories(server: Any, roots: Iterable[str], logger: Any = None)
             logger.warning(f"Skills over MCP unavailable in this fastmcp: {exc}")
         return 0
 
-    sources: list = []  # (root, only-this-skill-name or None)
+    from pathlib import Path
+
+    roots_of_skills: list = []  # folders whose child folders are skills
+    single: list = []           # folders that are one skill each
     for entry in roots:
         entry = os.path.expanduser(str(entry or "").strip())
         if not entry or not os.path.isdir(entry):
             continue
-        entry = os.path.abspath(entry)
-        if os.path.isfile(os.path.join(entry, "SKILL.md")):
-            sources.append((os.path.dirname(entry), os.path.basename(entry)))
-        else:
-            sources.append((entry, None))
-    if not sources:
+        folder = Path(entry).absolute()
+        (single if (folder / "SKILL.md").is_file() else roots_of_skills).append(folder)
+    if not roots_of_skills and not single:
         return 0
     warned: set = set()
 
+    def _warn(line: str) -> None:
+        if logger and line not in warned:
+            warned.add(line)
+            logger.warning(f"Skipped invalid skill {line}")
+
     class _LenientSkills(_skills.SkillsDirectoryProvider):
-        """Serve the listed sources; log and skip invalid skills."""
+        """Serve the listed skills; log and skip invalid ones.
+
+        A single-skill entry is loaded on its own, never by scanning its
+        parent, so pointing at a few skills in a big library stays cheap.
+        """
 
         def _scan(self):  # noqa: D401 - overrides the strict scan
-            from pathlib import Path
-
             served: dict = {}
-            for root, only in sources:
-                found, invalid = _skills._scan_skill_roots([Path(root)])
+            for folder in single:
+                name = folder.name
+                if name in served:
+                    continue
+                try:
+                    skill = _skills.Skill.from_directory(folder)
+                    if skill.name != name:
+                        raise ValueError(f"folder name must match its SKILL.md name {skill.name!r}")
+                except Exception as exc:  # noqa: BLE001 - report and keep serving the rest
+                    _warn(_skills._invalid_folder(folder, name, exc).lstrip("- "))
+                    continue
+                served[name] = skill
+            if roots_of_skills:
+                found, invalid = _skills._scan_skill_roots(roots_of_skills)
                 for path, skill in found.items():
-                    if only is not None and path != only:
-                        continue
                     served.setdefault(path, skill)
                 for line in invalid:
-                    if only is None or f"/{only}:" in line or f"{os.sep}{only}:" in line:
-                        if logger and line not in warned:
-                            warned.add(line)
-                            logger.warning(f"Skipped invalid skill {line.lstrip('- ')}")
+                    _warn(line.lstrip("- "))
             return served
 
     try:
-        provider = _LenientSkills([root for root, _ in sources], reload=True)
+        provider = _LenientSkills(roots_of_skills or [single[0].parent], reload=True)
         server.add_provider(provider)
     except Exception as exc:
         if logger:
