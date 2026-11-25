@@ -11,7 +11,7 @@ from src.utils.mcp_sdk import IS_FASTMCP4, FastMCP, add_skill_directories
 def _skill(root, name, description="does a thing"):
     folder = os.path.join(root, name)
     os.makedirs(folder)
-    with open(os.path.join(folder, "SKILL.md"), "w") as fh:
+    with open(os.path.join(folder, "SKILL.md"), "w", encoding="utf-8") as fh:
         fh.write(f"---\nname: {name}\ndescription: {description}\n---\nbody\n")
     return folder
 
@@ -68,7 +68,7 @@ class SkillRootsTest(unittest.TestCase):
     def test_list_file_and_dirs_are_read(self):
         import src.server as s
 
-        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as fh:
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as fh:
             fh.write("# comment\n/a/skill folder\n\n")
         env = {"DAVINCI_MCP_SKILLS_FILE": fh.name, "DAVINCI_MCP_SKILLS_DIRS": "/b" + os.pathsep + "/c"}
         with mock.patch.dict(os.environ, env):
