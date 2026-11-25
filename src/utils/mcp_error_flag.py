@@ -22,7 +22,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from src.utils.mcp_sdk import IS_FASTMCP4, FastMCP
 
 
 def is_error_payload(payload: Any) -> bool:
@@ -56,9 +56,20 @@ def flag_tool_error(result: Any) -> Any:
     pair for tools with an output schema, a content list for the rest, or a
     `CallToolResult` a tool built itself (left alone).
     """
-    from mcp.types import CallToolResult
+    from src.utils.mcp_sdk import CallToolResult
 
     if isinstance(result, CallToolResult):
+        return result
+    if IS_FASTMCP4 and hasattr(result, "structured_content") and hasattr(result, "content"):
+        # FastMCP 4 returns a ToolResult. Re-issue errors as an isError result;
+        # the wire handler passes a CallToolResult through unchanged.
+        if getattr(result, "is_error", False):
+            return result
+        structured = result.structured_content
+        if is_error_payload(structured) or (
+            structured is None and is_error_payload(_payload_from_content(result.content))
+        ):
+            return CallToolResult(content=list(result.content), structuredContent=structured, isError=True)
         return result
     if isinstance(result, tuple) and len(result) == 2:
         content, structured = result
@@ -77,22 +88,25 @@ class ErrorFlaggingFastMCP(FastMCP):
     overriding the method here is what the wire actually calls.
     """
 
-    async def call_tool(self, name: str, arguments: dict[str, Any]) -> Any:
+    async def call_tool(self, name: str, arguments: dict[str, Any] | None = None, *args: Any,
+                        **kwargs: Any) -> Any:
+        # FastMCP 4 re-enters call_tool(run_middleware=False) for the tool body;
+        # guard and flag only the outer call so each runs once.
+        if kwargs.get("run_middleware", True) is False:
+            return await super().call_tool(name, arguments, *args, **kwargs)
         refused = refuse_unknown_arguments(self, name, arguments)
         if refused is not None:
             return refused
-        return flag_tool_error(await super().call_tool(name, arguments))
+        return flag_tool_error(await super().call_tool(name, arguments, *args, **kwargs))
 
 
 def refuse_unknown_arguments(server: Any, name: str, arguments: Any) -> Any:
     """An `isError` result when `arguments` holds keys the tool does not take (#372), else None."""
-    from mcp.types import CallToolResult, TextContent
-
     from src.utils import mcp_arg_guard
+    from src.utils.mcp_sdk import CallToolResult, TextContent, get_tool
 
-    try:
-        tool = server._tool_manager.get_tool(name)
-    except Exception:
+    tool = get_tool(server, name)
+    if tool is None:
         return None
     unknown = mcp_arg_guard.unknown_arguments(tool, arguments)
     if not unknown:

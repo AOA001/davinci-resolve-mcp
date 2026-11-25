@@ -12,6 +12,7 @@ import unittest
 from unittest import mock
 
 from src.utils import mcp_transport as T
+from src.utils.mcp_sdk import IS_FASTMCP4
 
 INIT = {
     "jsonrpc": "2.0", "id": 1, "method": "initialize",
@@ -62,6 +63,7 @@ class AllowlistPolicyTests(unittest.TestCase):
         self.assertEqual(T.extra_allowed_hosts({}), [])
 
 
+@unittest.skipIf(IS_FASTMCP4, "networked transport runs on the v1 SDK only")
 class RealAppTests(unittest.TestCase):
     """Drive the real FastMCP streamable-http app through run_networked."""
 
@@ -82,7 +84,7 @@ class RealAppTests(unittest.TestCase):
         T.clear_transport_state()
 
     def _app_for(self, host):
-        from mcp.server.fastmcp import FastMCP
+        from src.utils.mcp_sdk import FastMCP
         mcp = FastMCP("allowlist-test")  # no host, exactly like src/server.py
         os.environ["DAVINCI_MCP_HOST"] = host
         built = {}

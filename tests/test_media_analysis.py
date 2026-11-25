@@ -36,7 +36,7 @@ from src.server import (
     _publish_clip_metadata_from_analysis,
     setup,
 )
-from mcp import types as mcp_types
+from src.utils.mcp_sdk import mcp_types as mcp_types
 from src.analysis_dashboard import (
     DashboardState,
     HTML,

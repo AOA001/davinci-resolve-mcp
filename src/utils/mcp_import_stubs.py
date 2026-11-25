@@ -42,7 +42,15 @@ def _real_mcp_is_importable() -> bool:
     try:
         import mcp  # noqa: F401
         from mcp import types as _real_types  # noqa: F401
-        from mcp.server.fastmcp import Context, FastMCP, Image  # noqa: F401
+    except Exception:
+        return False
+    try:
+        from fastmcp import Context, FastMCP  # noqa: F401  (FastMCP 4 backend)
+        return True
+    except Exception:
+        pass
+    try:
+        from mcp.server.fastmcp import Context, FastMCP, Image  # noqa: F401  (v1 backend)
     except Exception:
         return False
     return True

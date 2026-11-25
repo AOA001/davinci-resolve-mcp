@@ -17,8 +17,7 @@ for path in (SRC_DIR, PROJECT_DIR):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from mcp.server.fastmcp import FastMCP
-from mcp.types import ToolAnnotations
+from src.utils.mcp_sdk import FastMCP, ToolAnnotations, set_server_version
 from src.utils.mcp_error_flag import ErrorFlaggingFastMCP
 from src.utils import subtitle_append_guard
 from src.utils import clip_info_tracks
@@ -102,8 +101,7 @@ logger.info(f"Using Resolve API path: {RESOLVE_API_PATH}")
 logger.info(f"Using Resolve library path: {RESOLVE_LIB_PATH}")
 
 mcp = ErrorFlaggingFastMCP("DaVinciResolveMCP")
-if hasattr(mcp, "_mcp_server"):
-    mcp._mcp_server.version = VERSION
+set_server_version(mcp, VERSION)
 
 READ_ONLY_TOOL = ToolAnnotations(
     readOnlyHint=True,

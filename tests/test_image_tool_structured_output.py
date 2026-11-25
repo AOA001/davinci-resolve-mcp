@@ -21,16 +21,17 @@ import textwrap
 import unittest
 from unittest import mock
 
-from mcp.server.fastmcp import Image
+from src.utils.mcp_sdk import Image
 
 import src.server as s
+from src.utils.mcp_sdk import IS_FASTMCP4, block_mime_type, list_wire_tools, result_content
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 JPEG = b"\xff\xd8capture"
 
 
 def _blocks(sent):
-    return sent[0] if isinstance(sent, tuple) else sent
+    return result_content(sent)
 
 
 class ImageToolsThroughCallToolTest(unittest.TestCase):
@@ -40,7 +41,7 @@ class ImageToolsThroughCallToolTest(unittest.TestCase):
             sent = asyncio.run(s.mcp.call_tool("timeline_frame", {"action": "capture"}))
         blocks = _blocks(sent)
         self.assertEqual([b.type for b in blocks], ["image"])
-        self.assertEqual(blocks[0].mimeType, "image/jpeg")
+        self.assertEqual(block_mime_type(blocks[0]), "image/jpeg")
 
     def test_timeline_markers_thumbnail_arrives_as_image_content(self):
         image = Image(data=JPEG, format="jpeg")
@@ -50,7 +51,7 @@ class ImageToolsThroughCallToolTest(unittest.TestCase):
         self.assertEqual([b.type for b in _blocks(sent)], ["image"])
 
     def test_image_tools_declare_no_output_schema(self):
-        tools = {t.name: t for t in asyncio.run(s.mcp.list_tools())}
+        tools = {t.name: t for t in asyncio.run(list_wire_tools(s.mcp))}
         for name in ("timeline_frame", "timeline_markers"):
             with self.subTest(tool=name):
                 self.assertIsNone(tools[name].outputSchema)
@@ -80,7 +81,7 @@ _PY310_PROBE = textwrap.dedent(
     assert fm.func_metadata(_any_tool).wrap_output
 
     import src.server as s
-    from mcp.server.fastmcp import Image
+    from src.utils.mcp_sdk import Image
 
     image = Image(data=b"\\xff\\xd8capture", format="jpeg")
     with mock.patch.object(s, "_playhead_frame_capture", return_value=image):
@@ -91,6 +92,7 @@ _PY310_PROBE = textwrap.dedent(
 )
 
 
+@unittest.skipIf(IS_FASTMCP4, "probes the v1 SDK's func_metadata internals")
 class ImageToolsUnderPy310InferenceTest(unittest.TestCase):
     def test_capture_survives_the_py310_output_schema_inference(self):
         env = dict(os.environ, PYTHONPATH=REPO)

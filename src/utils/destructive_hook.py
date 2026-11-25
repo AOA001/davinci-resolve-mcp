@@ -1217,6 +1217,12 @@ def granular_destructive_op(
             return _annotate_security(result, operation_id=operation_id, risk_level=level)
 
         _inner.__signature__ = signature  # type: ignore[attr-defined]
+        if added_override:
+            # FastMCP 4 resolves the schema through type hints as well as the
+            # signature, so the added parameter needs an annotation entry too.
+            # A fresh dict: functools.wraps shares fn's own __annotations__.
+            _inner.__annotations__ = {**getattr(fn, "__annotations__", {}),
+                                      GRANULAR_OVERRIDE_PARAM: bool}
         _inner.__granular_destructive__ = (action, level)  # type: ignore[attr-defined]
         return _inner
 

@@ -93,7 +93,7 @@ class TestMcpImportStubs(unittest.TestCase):
 
         try:
             import mcp  # noqa: F401
-            from mcp.server.fastmcp import Context, FastMCP, Image  # noqa: F401
+            from src.utils.mcp_sdk import Context, FastMCP, Image  # noqa: F401
         except Exception:
             self.skipTest("real MCP SDK is not installed in this environment")
 

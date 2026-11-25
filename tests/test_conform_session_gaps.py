@@ -19,7 +19,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from mcp.server.fastmcp import Image
+from src.utils.mcp_sdk import Image
 
 import src.server as s
 from src.utils import page_lock, playback_guard
