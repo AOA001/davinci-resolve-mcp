@@ -5,7 +5,8 @@ import unittest
 
 import anyio
 
-from src.server import _install_threaded_tool_dispatch
+from src.server import _bridge_lock, _install_threaded_tool_dispatch
+from src.utils.mcp_sdk import IS_FASTMCP4
 
 
 class FakeTool:
@@ -25,6 +26,7 @@ class FakeMCP:
         self._tool_manager = FakeManager(tools)
 
 
+@unittest.skipIf(IS_FASTMCP4, "drives the v1 SDK's ToolManager internals")
 class ThreadedToolDispatchTest(unittest.TestCase):
     def test_wraps_sync_tools_and_skips_async(self):
         sync_tool = FakeTool(lambda **kw: {"ok": True}, is_async=False, name="sync")
@@ -58,7 +60,7 @@ class ThreadedToolDispatchTest(unittest.TestCase):
         # responded to" assert took the whole session down. Driven through the
         # real SDK over the in-memory transport, not the fakes above.
         from mcp import types
-        from mcp.server.fastmcp import FastMCP
+        from src.utils.mcp_sdk import FastMCP
         from mcp.shared.exceptions import McpError
         from mcp.shared.memory import create_connected_server_and_client_session
 
@@ -114,6 +116,43 @@ class ThreadedToolDispatchTest(unittest.TestCase):
     def test_non_mapping_tools_is_a_noop(self):
         # A future SDK shape that isn't a dict must degrade to inline, not crash.
         self.assertEqual(_install_threaded_tool_dispatch(FakeMCP(["not", "a", "map"])), 0)
+
+
+@unittest.skipUnless(IS_FASTMCP4, "FastMCP 4 dispatch")
+class BridgeLockedDispatchTest(unittest.TestCase):
+    """FastMCP 4 threads sync tools itself; the bridge lock must still serialize them."""
+
+    def _server(self):
+        from src.utils.mcp_sdk import FastMCP
+
+        app = FastMCP("lock-test")
+        seen = {}
+
+        @app.tool()
+        def body(x: int) -> dict:
+            seen["locked"] = _bridge_lock.locked()
+            seen["thread"] = threading.current_thread().name
+            return {"value": x}
+
+        @app.tool()
+        async def asynchronous(x: int) -> dict:
+            return {"value": x}
+
+        return app, seen
+
+    def test_sync_tools_run_off_loop_holding_the_bridge_lock(self):
+        app, seen = self._server()
+        self.assertEqual(_install_threaded_tool_dispatch(app), 1)
+        result = anyio.run(lambda: app.call_tool("body", {"x": 42}))
+        self.assertEqual(result.structured_content["value"], 42)
+        self.assertTrue(seen["locked"])
+        self.assertNotEqual(seen["thread"], threading.current_thread().name)
+        self.assertFalse(_bridge_lock.locked())
+
+    def test_installing_twice_does_not_double_wrap(self):
+        app, _ = self._server()
+        _install_threaded_tool_dispatch(app)
+        self.assertEqual(_install_threaded_tool_dispatch(app), 0)
 
 
 if __name__ == "__main__":

@@ -24,6 +24,11 @@ def accepted_arguments(tool: Any) -> Optional[set]:
     model = getattr(getattr(tool, "fn_metadata", None), "arg_model", None)
     fields = getattr(model, "model_fields", None)
     if not isinstance(fields, dict):
+        # FastMCP 4 tools carry a JSON schema instead of a pydantic arg model.
+        schema = getattr(tool, "parameters", None)
+        props = schema.get("properties") if isinstance(schema, dict) else None
+        if isinstance(props, dict):
+            return set(props)
         return None
     names = set(fields)
     names.update(f.alias for f in fields.values() if getattr(f, "alias", None))

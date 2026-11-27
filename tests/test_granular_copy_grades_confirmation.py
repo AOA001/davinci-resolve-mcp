@@ -16,6 +16,7 @@ from unittest import mock
 
 import src.granular.timeline_item as granular
 from src.granular.common import CONFIRM_TOKENS
+from src.utils.mcp_sdk import list_wire_tools
 
 
 class _ItemStub:
@@ -190,7 +191,7 @@ class GranularCopyGradesAnnotationTest(unittest.TestCase):
 
         from src.granular.common import mcp
 
-        tools = asyncio.run(mcp.list_tools())
+        tools = asyncio.run(list_wire_tools(mcp))
         tool = next(t for t in tools if t.name == "ti_copy_grades")
 
         self.assertTrue(tool.annotations.destructiveHint)

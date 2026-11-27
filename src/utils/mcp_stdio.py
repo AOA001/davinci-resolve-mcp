@@ -6,7 +6,6 @@ import sys
 from io import TextIOWrapper
 
 import anyio
-from mcp.server.stdio import stdio_server
 
 
 def create_text_stdio():
@@ -18,13 +17,10 @@ def create_text_stdio():
 
 async def run_fastmcp_stdio_async(fastmcp):
     """Run a FastMCP server over stdio using strict LF-delimited JSON."""
+    from src.utils.mcp_sdk import run_stdio_async
+
     stdin, stdout = create_text_stdio()
-    async with stdio_server(stdin=stdin, stdout=stdout) as (read_stream, write_stream):
-        await fastmcp._mcp_server.run(  # noqa: SLF001 - no public injection point exists yet
-            read_stream,
-            write_stream,
-            fastmcp._mcp_server.create_initialization_options(),
-        )
+    await run_stdio_async(fastmcp, stdin=stdin, stdout=stdout)
 
 
 def run_fastmcp_stdio(fastmcp):

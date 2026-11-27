@@ -3,6 +3,7 @@ import os
 import unittest
 
 from src.utils import mcp_transport as T
+from src.utils.mcp_sdk import IS_FASTMCP4
 
 
 class TokenTest(unittest.TestCase):
@@ -70,6 +71,7 @@ class AuthMiddlewareTest(unittest.TestCase):
         self.assertEqual(r.text, "ok")
 
 
+@unittest.skipIf(IS_FASTMCP4, "networked transport runs on the v1 SDK only")
 class GeneratedTokenNeverLoggedTest(unittest.TestCase):
     """The generated token is the transport's only access control.
 

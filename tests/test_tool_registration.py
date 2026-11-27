@@ -14,12 +14,13 @@ import asyncio
 import unittest
 
 from tests.test_import import PROJECT_ROOT, _count_mcp_tools
+from src.utils.mcp_sdk import list_wire_tools
 
 
 def _registered_tool_names():
     import src.server as server
 
-    tools = asyncio.run(server.mcp.list_tools())
+    tools = asyncio.run(list_wire_tools(server.mcp))
     return sorted(t.name for t in tools)
 
 

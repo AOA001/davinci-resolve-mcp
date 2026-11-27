@@ -196,6 +196,13 @@ def _stderr_is_interactive() -> bool:
 
 def run_networked(mcp, transport):
     """Serve `mcp` over an authenticated HTTP transport ('sse'|'streamable-http')."""
+    from src.utils.mcp_sdk import IS_FASTMCP4
+
+    if IS_FASTMCP4:
+        msg = (f"The {transport} transport is not ported to FastMCP 4 yet. "
+               "Use stdio, or set DAVINCI_MCP_SDK=mcp1 to serve it on the v1 SDK.")
+        logging.getLogger(__name__).error(msg)
+        raise RuntimeError(msg)
     import uvicorn
 
     host = os.environ.get("DAVINCI_MCP_HOST") or mcp.settings.host or "127.0.0.1"

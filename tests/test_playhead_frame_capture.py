@@ -15,7 +15,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from mcp.server.fastmcp import Image
+from src.utils.mcp_sdk import Image, block_mime_type, result_content
 
 import src.server as s
 from src.utils import page_lock
@@ -669,7 +669,7 @@ class CaptureRenderPageRestoreTest(_RenderCapture, unittest.TestCase):
             out, _, _ = self._capture({}, resolve=resolve)
         with mock.patch.object(s, "_playhead_frame_capture", return_value=out):
             sent = asyncio.run(s.mcp.call_tool("timeline_frame", {"action": "capture"}))
-        blocks = sent[0] if isinstance(sent, tuple) else sent
+        blocks = result_content(sent)
         self.assertEqual([b.type for b in blocks], ["image", "text"])
         self.assertIn("open_page", json.loads(blocks[1].text)["warnings"][0])
 

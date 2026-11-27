@@ -14,6 +14,7 @@ from unittest import mock
 
 from src.utils import mcp_arg_guard
 from src.utils.mcp_error_flag import ErrorFlaggingFastMCP
+from src.utils.mcp_sdk import iter_tools
 
 
 def _server():
@@ -94,7 +95,7 @@ class RealServerTest(unittest.TestCase):
         """The refusal's advice ('move it into params') must be true for each compound tool."""
         import src.server as s
 
-        for tool in s.mcp._tool_manager.list_tools():
+        for tool in iter_tools(s.mcp):
             accepted = mcp_arg_guard.accepted_arguments(tool)
             if accepted and "action" in accepted:
                 self.assertIn("params", accepted, tool.name)

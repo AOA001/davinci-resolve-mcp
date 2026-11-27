@@ -12,6 +12,7 @@ handle.
 """
 import asyncio
 import unittest
+from src.utils.mcp_sdk import list_wire_tools
 
 
 def _allows_null(schema):
@@ -24,7 +25,7 @@ def _allows_null(schema):
 
 def _null_default_args_rejecting_null(mcp):
     bad = []
-    for tool in asyncio.run(mcp.list_tools()):
+    for tool in asyncio.run(list_wire_tools(mcp)):
         for name, prop in tool.inputSchema.get("properties", {}).items():
             if "default" in prop and prop["default"] is None and not _allows_null(prop):
                 bad.append(f"{tool.name}.{name}")

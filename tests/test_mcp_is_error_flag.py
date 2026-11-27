@@ -14,7 +14,7 @@ import json
 import unittest
 from typing import Any, Dict, Optional
 
-from mcp.types import CallToolResult
+from src.utils.mcp_sdk import CallToolResult, result_structured
 
 from src.utils.mcp_error_flag import ErrorFlaggingFastMCP, flag_tool_error, is_error_payload
 
@@ -67,7 +67,7 @@ class ErrorFlagThroughDispatchTest(unittest.TestCase):
     def test_success_is_left_as_fastmcp_built_it(self):
         result = self.call("ok")
         self.assertNotIsInstance(result, CallToolResult)
-        self.assertTrue(_body(result[1])["success"])
+        self.assertTrue(_body(result_structured(result))["success"])
 
     def test_success_false_without_error_is_not_flagged(self):
         self.assertNotIsInstance(self.call("negative"), CallToolResult)

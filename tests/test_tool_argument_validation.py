@@ -44,6 +44,7 @@ import sys
 import tempfile
 import unittest
 from typing import Any, Dict, List, Tuple
+from src.utils.mcp_sdk import list_wire_tools
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if REPO_ROOT not in sys.path:
@@ -143,7 +144,7 @@ class ToolArgumentValidationTests(unittest.TestCase):
         the day it ships, with nothing to keep in sync.
         """
         pairs: List[Tuple[str, str]] = []
-        for tool in sorted(t.name for t in await cls.server.mcp.list_tools()):
+        for tool in sorted(t.name for t in await list_wire_tools(cls.server.mcp)):
             try:
                 body = _text_of(await cls.server.mcp.call_tool(tool, {"action": "__probe_invalid__"}))
             except Exception:

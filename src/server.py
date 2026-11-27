@@ -266,8 +266,7 @@ logger = logging.getLogger("resolve-mcp")
 
 # ─── MCP Server ───────────────────────────────────────────────────────────────
 
-from mcp.server.fastmcp import Context, FastMCP, Image
-from mcp import types as mcp_types
+from src.utils.mcp_sdk import Context, FastMCP, Image, mcp_types, set_server_version
 from src.utils.mcp_error_flag import ErrorFlaggingFastMCP
 mcp = ErrorFlaggingFastMCP(
     "DaVinciResolveMCP",
@@ -288,8 +287,7 @@ mcp = ErrorFlaggingFastMCP(
         "issue link for the user to review and submit; nothing is filed for them."
     ),
 )
-if hasattr(mcp, "_mcp_server"):
-    mcp._mcp_server.version = VERSION
+set_server_version(mcp, VERSION)
 
 READ_ONLY_TOOL = mcp_types.ToolAnnotations(
     readOnlyHint=True,
@@ -36722,6 +36720,41 @@ def _resource_install_guidance() -> Dict[str, Any]:
 # Server Startup
 # ═══════════════════════════════════════════════════════════════════════════════
 
+def _skill_roots() -> List[str]:
+    """Skill sources to serve through Skills over MCP.
+
+    The repo's own `.claude/skills` (the Resolve domain skills), then every
+    entry in $DAVINCI_MCP_SKILLS_DIRS (os.pathsep-separated) and every
+    non-blank, non-# line of the file named by $DAVINCI_MCP_SKILLS_FILE. An
+    entry is either a folder of skill folders or one skill folder (it holds a
+    SKILL.md), so a studio can list exactly which of its own skills to serve,
+    read in place. Set DAVINCI_MCP_SKILLS=0 to serve none.
+    """
+    if os.environ.get("DAVINCI_MCP_SKILLS", "1").strip().lower() in ("0", "false", "no", "off"):
+        return []
+    roots = [os.path.join(project_dir, ".claude", "skills")]
+    extra = os.environ.get("DAVINCI_MCP_SKILLS_DIRS", "")
+    roots.extend(p.strip() for p in extra.split(os.pathsep) if p.strip())
+    listing = os.path.expanduser(os.environ.get("DAVINCI_MCP_SKILLS_FILE", "").strip())
+    if listing:
+        try:
+            with open(listing, encoding="utf-8") as fh:
+                roots.extend(line.strip() for line in fh
+                             if line.strip() and not line.lstrip().startswith("#"))
+        except OSError as exc:
+            logger.warning(f"Skills list {listing} unreadable: {exc}")
+    return roots
+
+
+def _install_skills(fastmcp) -> int:
+    """Attach the skill folders to `fastmcp` (FastMCP 4.2+ only; else a no-op)."""
+    from src.utils.mcp_sdk import BACKEND, add_skill_directories
+
+    added = add_skill_directories(fastmcp, _skill_roots(), logger)
+    logger.info(f"Skills over MCP: {added} skill folder(s) served (SDK backend: {BACKEND})")
+    return added
+
+
 def _install_threaded_tool_dispatch(fastmcp) -> int:
     """Run synchronous tool bodies in a worker thread instead of inline on the
     event loop.
@@ -36741,8 +36774,41 @@ def _install_threaded_tool_dispatch(fastmcp) -> int:
     changes, leave the tools as-is, falling back to the current inline behavior.
     """
     import functools
+    import inspect
     import anyio
     from anyio.lowlevel import checkpoint_if_cancelled
+
+    from src.utils.mcp_sdk import IS_FASTMCP4, iter_tools
+
+    if IS_FASTMCP4:
+        # FastMCP 4 already runs sync tool bodies in a worker thread
+        # (run_in_thread=True). What it does not do is serialize them, so wrap
+        # each sync body in _bridge_lock: the Resolve bridge must never be
+        # entered concurrently.
+        wrapped = 0
+        for tool in iter_tools(fastmcp):
+            fn = getattr(tool, "fn", None)
+            if fn is None or getattr(fn, "_bridge_locked", False):
+                continue
+            if inspect.iscoroutinefunction(fn) or not getattr(tool, "run_in_thread", True):
+                continue
+
+            def _locked(fn=fn):
+                @functools.wraps(fn)
+                def call(*args, **kwargs):
+                    with _bridge_lock:
+                        return fn(*args, **kwargs)
+                call._bridge_locked = True
+                return call
+
+            try:
+                tool.fn = _locked()
+            except Exception as exc:  # unexpected SDK shape — keep the original tool
+                logger.warning(f"bridge lock skipped for {getattr(tool, 'name', '?')}: {exc}")
+                continue
+            wrapped += 1
+        logger.info(f"Bridge-locked threaded dispatch installed for {wrapped} tools")
+        return wrapped
 
     manager = getattr(fastmcp, "_tool_manager", None)
     tools = getattr(manager, "_tools", None)
@@ -36790,6 +36856,7 @@ if __name__ == "__main__":
     logger.info(f"Result envelope mode: {_apply_persisted_envelope_mode()}")
     start_background_update_check(VERSION, project_dir, logger, env=_setup_update_env())
     _install_threaded_tool_dispatch(mcp)
+    _install_skills(mcp)
 
     # Support --full flag to run the 377-tool granular server instead
     if "--full" in sys.argv:
@@ -36800,6 +36867,7 @@ if __name__ == "__main__":
 
         connect_at_startup()
         _install_threaded_tool_dispatch(granular_mcp)
+        _install_skills(granular_mcp)
         run_fastmcp_stdio(granular_mcp)
         sys.exit(0)
 

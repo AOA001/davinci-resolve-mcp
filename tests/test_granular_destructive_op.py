@@ -26,6 +26,7 @@ import src.granular.timeline_item as ti
 from src.granular.common import mcp
 from src.utils import destructive_hook as dh
 from src.utils.execution_lifecycle import RiskLevel
+from src.utils.mcp_sdk import list_wire_tools
 
 
 def _probe(name: str, returns):
@@ -446,7 +447,7 @@ class McpSchema(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.tools = {t.name: t for t in asyncio.run(mcp.list_tools())}
+        cls.tools = {t.name: t for t in asyncio.run(list_wire_tools(mcp))}
 
     def test_every_hooked_tool_advertises_the_override_and_nothing_else_new(self):
         import importlib
